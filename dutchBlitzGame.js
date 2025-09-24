@@ -68,6 +68,9 @@ class Player {
         this.drawRevealed = [];
         this.postPiles = [[], [], []];
         this.playsThisRound = 0;
+        
+        // Ensure we have some "1" cards accessible by drawing initial cards
+        this.drawCards();
     }
 
     getTopBlitzCard() {
@@ -103,20 +106,24 @@ class Player {
         // Draw up to 3 cards from draw pile to revealed
         if (this.drawPile.length === 0 && this.drawRevealed.length === 0) return false;
         
-        if (this.drawRevealed.length === 0) {
-            // Reveal new cards
+        if (this.drawRevealed.length === 0 && this.drawPile.length > 0) {
+            // Reveal new cards when revealed pile is empty
             for (let i = 0; i < 3 && this.drawPile.length > 0; i++) {
                 this.drawRevealed.push(this.drawPile.pop());
             }
-        } else {
-            // Cycle through draw pile when no more moves available
+            return true;
+        } else if (this.drawPile.length > 0) {
+            // Cycle through draw pile - put revealed cards back and draw new ones
             this.drawPile.unshift(...this.drawRevealed.reverse());
             this.drawRevealed = [];
             for (let i = 0; i < 3 && this.drawPile.length > 0; i++) {
                 this.drawRevealed.push(this.drawPile.pop());
             }
+            return true;
         }
-        return true;
+        
+        // No more cards available
+        return false;
     }
 
     playCard(card, source, dutchPiles, targetPostPile = null) {
@@ -189,6 +196,11 @@ class SimpleBot extends Player {
     }
 
     makeMove(dutchPiles) {
+        // First check if we need to draw cards to get access to more options
+        if (this.drawRevealed.length === 0 && this.drawPile.length > 0) {
+            this.drawCards();
+        }
+        
         const available = this.getAvailableCards();
         const moves = [];
 
@@ -196,7 +208,7 @@ class SimpleBot extends Player {
         for (let availableCard of available) {
             const {card, source} = availableCard;
             
-            // Check Dutch pile moves
+            // Check Dutch pile moves first (highest priority)
             const dutchPile = dutchPiles[card.color];
             const topDutchCard = dutchPile.length > 0 ? dutchPile[dutchPile.length - 1] : null;
             if (card.canPlayOn(topDutchCard)) {
@@ -205,22 +217,27 @@ class SimpleBot extends Player {
                 });
             }
 
-            // Check post pile moves
+            // Check post pile moves - only if we have cards to build down from
             for (let i = 0; i < this.postPiles.length; i++) {
                 const postPile = this.postPiles[i];
                 const topPostCard = postPile.length > 0 ? postPile[postPile.length - 1] : null;
                 if (card.canPostOn(topPostCard)) {
-                    moves.push({
-                        card, source, target: 'post', postPile: i, 
-                        priority: this.getMovePriority(card, source, 'post')
-                    });
+                    // Don't fill post piles unnecessarily if the card value is too high
+                    // This prevents clogging post piles with high cards when we need low ones
+                    if (!topPostCard || card.value < 8 || topPostCard.value - card.value >= 2) {
+                        moves.push({
+                            card, source, target: 'post', postPile: i, 
+                            priority: this.getMovePriority(card, source, 'post')
+                        });
+                    }
                 }
             }
         }
 
         if (moves.length === 0) {
-            // Try to draw more cards
-            return this.drawCards();
+            // Try to draw more cards to find new opportunities
+            const drewCards = this.drawCards();
+            return drewCards; // Return true if we drew cards, false if we can't
         }
 
         // Sort moves by priority and make the best one
@@ -237,11 +254,19 @@ class SimpleBot extends Player {
     getMovePriority(card, source, target) {
         let priority = 0;
         
+        // Much higher priority for starting Dutch piles with "1" cards
+        if (target === 'dutch' && card.value === 1) {
+            priority += 200; // Very high priority for starting Dutch piles
+        }
+        
         // Higher priority for playing from blitz pile (main goal)
         if (source.source === 'blitz') priority += 100;
         
         // Higher priority for Dutch pile moves (scores points and clears cards)
         if (target === 'dutch') priority += 50;
+        
+        // Lower value cards have higher priority (easier to play subsequent cards)
+        priority += (11 - card.value) * 5;
         
         // Strategy-based priorities
         if (this.strategy === 'aggressive') {
@@ -319,14 +344,20 @@ class DutchBlitzGame {
         if (!this.gameActive) return false;
 
         let anyPlayerMoved = false;
+        let staleMateCounter = 0;
 
         // Each player gets a chance to make moves
         for (let player of this.players) {
             if (this.gameActive && !player.hasWon()) {
                 // Let player make multiple moves if possible (like real Dutch Blitz)
                 let movesMade = 0;
-                while (movesMade < 3 && this.gameActive) { // Limit moves per turn to prevent infinite loops
+                let attempts = 0;
+                const maxAttempts = 5; // Prevent infinite loops
+                
+                while (movesMade < 3 && attempts < maxAttempts && this.gameActive) {
                     const madeMoveThisTurn = player.makeMove(this.dutchPiles);
+                    attempts++;
+                    
                     if (madeMoveThisTurn) {
                         anyPlayerMoved = true;
                         movesMade++;
@@ -338,7 +369,28 @@ class DutchBlitzGame {
                             return true;
                         }
                     } else {
-                        break; // No more moves available
+                        // If player can't make a move, try drawing cards more aggressively
+                        for (let drawAttempts = 0; drawAttempts < 2; drawAttempts++) {
+                            if (player.drawCards()) {
+                                // After drawing, try one more move
+                                const postDrawMove = player.makeMove(this.dutchPiles);
+                                if (postDrawMove) {
+                                    anyPlayerMoved = true;
+                                    movesMade++;
+                                    this.moveCount++;
+                                    
+                                    if (player.hasWon()) {
+                                        this.endRound(player);
+                                        return true;
+                                    }
+                                    break;
+                                }
+                            } else {
+                                staleMateCounter++;
+                                break;
+                            }
+                        }
+                        break; // No more moves available for this player
                     }
                 }
             }
@@ -347,11 +399,16 @@ class DutchBlitzGame {
         // Update round duration
         this.roundDuration = Math.floor((Date.now() - this.roundStartTime) / 1000);
 
-        // Check if no one can make any moves (stalemate)
-        if (!anyPlayerMoved) {
+        // Check if no one can make any moves (stalemate) - all players must be stuck
+        if (!anyPlayerMoved && staleMateCounter >= this.players.length) {
             console.log("⚠️ Stalemate - no player can make any moves");
             this.endRound(null);
             return true;
+        }
+
+        // Log game state periodically for debugging
+        if (this.moveCount % 20 === 0) {
+            this.logGameState();
         }
 
         return anyPlayerMoved;
