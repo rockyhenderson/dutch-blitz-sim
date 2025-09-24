@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dutch Blitz Simulator</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .game-controls {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .game-state {
+            background-color: white;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .players {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .player {
+            background-color: white;
+            border-radius: 5px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .player.winner {
+            background-color: #d4edda;
+            border: 2px solid #28a745;
+        }
+        .stats {
+            background-color: white;
+            border-radius: 5px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .card {
+            display: inline-block;
+            width: 30px;
+            height: 40px;
+            border: 1px solid #333;
+            border-radius: 3px;
+            margin: 2px;
+            text-align: center;
+            line-height: 40px;
+            font-size: 12px;
+            background-color: white;
+        }
+        .card.red { color: red; }
+        .card.blue { color: blue; }
+        .card.green { color: green; }
+        .card.yellow { color: orange; }
+        .pile {
+            margin: 5px 0;
+            min-height: 45px;
+        }
+        .console {
+            background-color: #000;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            height: 200px;
+            overflow-y: scroll;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dutch Blitz Simulator</h1>
+        
+        <div class="game-controls">
+            <button id="startGame">Start New Game</button>
+            <button id="pauseGame" disabled>Pause</button>
+            <button id="resumeGame" disabled>Resume</button>
+            <button id="stepGame" disabled>Single Step</button>
+            <label>
+                Speed: <select id="gameSpeed">
+                    <option value="50">Very Fast</option>
+                    <option value="200">Fast</option>
+                    <option value="500" selected>Normal</option>
+                    <option value="1000">Slow</option>
+                    <option value="2000">Very Slow</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="game-state">
+            <h3>Game Status: <span id="gameStatus">Ready to start</span></h3>
+            <p>Round: <span id="roundNumber">0</span> | Duration: <span id="roundDuration">0</span>s</p>
+            
+            <h4>Dutch Piles (Shared Foundation)</h4>
+            <div id="dutchPiles">
+                <div class="pile">Red: <span id="dutch-red"></span></div>
+                <div class="pile">Blue: <span id="dutch-blue"></span></div>
+                <div class="pile">Green: <span id="dutch-green"></span></div>
+                <div class="pile">Yellow: <span id="dutch-yellow"></span></div>
+            </div>
+        </div>
+
+        <div class="players" id="playersContainer">
+        </div>
+
+        <div class="stats">
+            <h3>Game Statistics</h3>
+            <div id="gameStats"></div>
+        </div>
+
+        <div class="game-state">
+            <h3>Console Output</h3>
+            <div class="console" id="console"></div>
+        </div>
+    </div>
+
+    <script src="dutchBlitzGame.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
